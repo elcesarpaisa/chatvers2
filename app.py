@@ -1,19 +1,18 @@
-import os
+import google.generativeai as genai
 import requests
 import streamlit as st
-from google import genai
 
 # Configuración de la página pública
 st.set_page_config(page_title="Asistente Virtual", page_icon="💬")
 st.title("Asistente de Consultas")
 st.caption("Respuestas basadas exclusivamente en nuestra documentación oficial.")
 
-# 1. ID de tu documento de Google Drive (Reemplaza el texto entre comillas)
-GOOGLE_DOC_ID = "1hrZLnqVqmsUz0n0FwKCrDJ7XQOILrO42"
+# 1. ID de tu documento de Google Drive
+GOOGLE_DOC_ID = "PEGA_AQUI_EL_ID_DE_TU_GOOGLE_DOC"
 
 
 # Función para leer el Google Doc en tiempo real
-@st.cache_data(ttl=60)  # Se actualiza cada 60 segundos si editas el Drive
+@st.cache_data(ttl=60)
 def cargar_datos_drive(doc_id):
   url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
   respuesta = requests.get(url)
@@ -24,14 +23,16 @@ def cargar_datos_drive(doc_id):
 
 base_conocimiento = cargar_datos_drive(GOOGLE_DOC_ID)
 
-# 2. Conexión oculta y segura con tu API Key (se configurará en el Paso 4)
+# 2. Conexión segura con tu API Key desde los secretos de Streamlit
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 if not api_key:
-  st.error("Falta configurar la clave del sistema.")
+  st.error("Falta configurar la clave del sistema en los secretos.")
   st.stop()
 
-client = genai.Client(api_key=api_key)
+# Configurar el cliente de Google GenAI clásico
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Historial de conversación
 if "messages" not in st.session_state:
@@ -57,21 +58,17 @@ if prompt := st.chat_input("Escribe tu consulta aquí..."):
     1. Responde ÚNICAMENTE utilizando la información proporcionada arriba.
     2. Si el usuario hace una pregunta cuya respuesta NO está en el texto de arriba, responde exactamente: "Lo siento, solo estoy autorizado para responder consultas específicas sobre nuestra información oficial y no tengo datos sobre ese tema."
     3. No inventes, no supongas y no uses conocimientos externos bajo ninguna circunstancia.
+    
+    Pregunta del usuario: {prompt}
     """
 
   with st.chat_message("assistant"):
     with st.spinner("Consultando..."):
       try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[instrucciones_sistema, f"Pregunta del usuario: {prompt}"],
-        )
+        response = model.generate_content(instrucciones_sistema)
         bot_respuesta = response.text
-      except Exception:
-        bot_respuesta = (
-            "En este momento hay mucha demanda. Por favor intenta de nuevo en"
-            " unos segundos."
-        )
+      except Exception as e:
+        bot_respuesta = f"Ocurrió un error al procesar la respuesta: {e}"
 
       st.markdown(bot_respuesta)
       st.session_state.messages.append(
