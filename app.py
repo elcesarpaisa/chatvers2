@@ -1,4 +1,3 @@
-import google.generativeai as genai
 import requests
 import streamlit as st
 
@@ -8,7 +7,7 @@ st.title("Asistente de Consultas")
 st.caption("Respuestas basadas exclusivamente en nuestra documentación oficial.")
 
 # 1. ID de tu documento de Google Drive
-GOOGLE_DOC_ID = "PEGA_AQUI_EL_ID_DE_TU_GOOGLE_DOC"
+GOOGLE_DOC_ID = "AQ.Ab8RN6K-PePxEGemVWLXQEd2QjiJcdwy4gas-Dm9Nnentd9x9g"
 
 
 # Función para leer el Google Doc en tiempo real
@@ -24,15 +23,11 @@ def cargar_datos_drive(doc_id):
 base_conocimiento = cargar_datos_drive(GOOGLE_DOC_ID)
 
 # 2. Conexión segura con tu API Key desde los secretos de Streamlit
-api_key = st.secrets.get("GEMINI_API_KEY", "")
+api_key = st.secrets.get("AQ.Ab8RN6K-PePxEGemVWLXQEd2QjiJcdwy4gas-Dm9Nnentd9x9g", "")
 
 if not api_key:
   st.error("Falta configurar la clave del sistema en los secretos.")
   st.stop()
-
-# Configurar el cliente de Google GenAI clásico
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Historial de conversación
 if "messages" not in st.session_state:
@@ -65,8 +60,25 @@ if prompt := st.chat_input("Escribe tu consulta aquí..."):
   with st.chat_message("assistant"):
     with st.spinner("Consultando..."):
       try:
-        response = model.generate_content(instrucciones_sistema)
-        bot_respuesta = response.text
+        # Llamada directa a la API de Gemini mediante solicitudes HTTP estándar
+        url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        headers = {"Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": instrucciones_sistema}]}]}
+
+        response = requests.post(url_api, json=payload, headers=headers)
+
+        if response.status_code == 200:
+          data = response.json()
+          bot_respuesta = (
+              data.get("candidates", [{}])[0]
+              .get("content", {})
+              .get("parts", [{}])[0]
+              .get("text", "No se obtuvo respuesta.")
+          )
+        else:
+          bot_respuesta = (
+              f"Error de conexión con la IA (Código {response.status_code})"
+          )
       except Exception as e:
         bot_respuesta = f"Ocurrió un error al procesar la respuesta: {e}"
 
